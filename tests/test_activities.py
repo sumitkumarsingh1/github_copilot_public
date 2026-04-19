@@ -25,16 +25,18 @@ class TestActivitiesEndpoint:
         - Response contains all activities
         - Each activity has required fields (description, schedule, max_participants, participants)
         """
-        response = test_client.get("/activities")
+        # Arrange
+        expected_activities = ["Chess Club", "Programming Class", "Basketball Team"]
         
-        assert response.status_code == 200
+        # Act
+        response = test_client.get("/activities")
         data = response.json()
         
-        # Verify all activities are returned
+        # Assert
+        assert response.status_code == 200
         assert len(data) == 3
-        assert "Chess Club" in data
-        assert "Programming Class" in data
-        assert "Basketball Team" in data
+        for activity_name in expected_activities:
+            assert activity_name in data
         
         # Verify activity structure
         for activity_name, activity_data in data.items():
@@ -50,11 +52,17 @@ class TestActivitiesEndpoint:
         
         Verifies that the Chess Club has the participant added in the fixture.
         """
+        # Arrange
+        activity_name = "Chess Club"
+        expected_participant = "michael@mergington.edu"
+        
+        # Act
         response = test_client.get("/activities")
         data = response.json()
+        chess_club = data[activity_name]
         
-        chess_club = data["Chess Club"]
-        assert "michael@mergington.edu" in chess_club["participants"]
+        # Assert
+        assert expected_participant in chess_club["participants"]
         assert len(chess_club["participants"]) == 1
 
 
@@ -69,10 +77,16 @@ class TestRootEndpoint:
         - Status code is 307 (temporary redirect)
         - Location header points to /static/index.html
         """
+        # Arrange
+        expected_status_code = 307
+        expected_location = "/static/index.html"
+        
+        # Act
         response = test_client.get("/", follow_redirects=False)
         
-        assert response.status_code == 307
-        assert response.headers["location"] == "/static/index.html"
+        # Assert
+        assert response.status_code == expected_status_code
+        assert response.headers["location"] == expected_location
 
 
 class TestSignupEndpoint:
@@ -87,21 +101,22 @@ class TestSignupEndpoint:
         - Participant email is added to the activity
         - Response message is correct
         """
+        # Arrange
         email = "newstudent@mergington.edu"
         activity_name = "Programming Class"
+        signup_url = f"/activities/{activity_name}/signup"
         
-        response = test_client.post(
-            f"/activities/{activity_name}/signup",
-            params={"email": email}
-        )
-        
-        assert response.status_code == 200
+        # Act
+        response = test_client.post(signup_url, params={"email": email})
         data = response.json()
+        
+        # Assert - Response structure
+        assert response.status_code == 200
         assert "message" in data
         assert email in data["message"]
         assert activity_name in data["message"]
         
-        # Verify the participant was actually added
+        # Assert - Participant was added
         activities_response = test_client.get("/activities")
         activities = activities_response.json()
         assert email in activities[activity_name]["participants"]
@@ -114,25 +129,23 @@ class TestSignupEndpoint:
         - Multiple participants can signup to the same activity
         - Each signup returns success
         """
+        # Arrange
         activity_name = "Programming Class"
         email1 = "student1@mergington.edu"
         email2 = "student2@mergington.edu"
+        signup_url = f"/activities/{activity_name}/signup"
         
-        # First signup
-        response1 = test_client.post(
-            f"/activities/{activity_name}/signup",
-            params={"email": email1}
-        )
+        # Act - First signup
+        response1 = test_client.post(signup_url, params={"email": email1})
+        
+        # Act - Second signup
+        response2 = test_client.post(signup_url, params={"email": email2})
+        
+        # Assert - Both signups succeeded
         assert response1.status_code == 200
-        
-        # Second signup
-        response2 = test_client.post(
-            f"/activities/{activity_name}/signup",
-            params={"email": email2}
-        )
         assert response2.status_code == 200
         
-        # Verify both are in the activity
+        # Assert - Both participants in activity
         activities_response = test_client.get("/activities")
         activities = activities_response.json()
         participants = activities[activity_name]["participants"]
@@ -152,21 +165,22 @@ class TestUnregisterEndpoint:
         - Participant email is removed from the activity
         - Response message is correct
         """
+        # Arrange
         activity_name = "Chess Club"
-        email = "michael@mergington.edu"  # This participant exists in fixture
+        email = "michael@mergington.edu"  # Exists in fixture
+        unregister_url = f"/activities/{activity_name}/unregister"
         
-        response = test_client.delete(
-            f"/activities/{activity_name}/unregister",
-            params={"email": email}
-        )
-        
-        assert response.status_code == 200
+        # Act
+        response = test_client.delete(unregister_url, params={"email": email})
         data = response.json()
+        
+        # Assert - Response structure
+        assert response.status_code == 200
         assert "message" in data
         assert email in data["message"]
         assert activity_name in data["message"]
         
-        # Verify the participant was actually removed
+        # Assert - Participant was removed
         activities_response = test_client.get("/activities")
         activities = activities_response.json()
         assert email not in activities[activity_name]["participants"]
@@ -179,27 +193,28 @@ class TestUnregisterEndpoint:
         - Participant can be removed and re-added to an activity
         - Activity participant list reflects the changes
         """
+        # Arrange
         activity_name = "Chess Club"
         email = "michael@mergington.edu"
+        unregister_url = f"/activities/{activity_name}/unregister"
+        signup_url = f"/activities/{activity_name}/signup"
         
-        # Unregister
-        unregister_response = test_client.delete(
-            f"/activities/{activity_name}/unregister",
-            params={"email": email}
-        )
+        # Act - Unregister
+        unregister_response = test_client.delete(unregister_url, params={"email": email})
+        
+        # Assert - Unregister succeeded
         assert unregister_response.status_code == 200
         
-        # Verify removed
+        # Assert - Participant removed
         activities1 = test_client.get("/activities").json()
         assert email not in activities1[activity_name]["participants"]
         
-        # Signup again
-        signup_response = test_client.post(
-            f"/activities/{activity_name}/signup",
-            params={"email": email}
-        )
+        # Act - Signup again
+        signup_response = test_client.post(signup_url, params={"email": email})
+        
+        # Assert - Signup succeeded
         assert signup_response.status_code == 200
         
-        # Verify back in activity
+        # Assert - Participant re-added
         activities2 = test_client.get("/activities").json()
         assert email in activities2[activity_name]["participants"]
